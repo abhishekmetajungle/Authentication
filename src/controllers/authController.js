@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
+const transporter = require('../config/smtp_email_sender.js');
 
 exports.login = async (req, res) => {
   const { username, password } = req.body;
@@ -27,6 +28,7 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   const { username, password, email, role } = req.body;
+  const nodemailer = require('nodemailer');
 
   try {
     // Check if the email already exists in the database
@@ -41,7 +43,8 @@ exports.register = async (req, res) => {
       username,
       password: hashedPassword,
       email,
-      role: role | 'admin'
+      role: role | 'admin',
+      twoFactorCode: hashedTwoFactorCode
     });
 
     await user.save();
