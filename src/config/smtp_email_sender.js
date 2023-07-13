@@ -1,10 +1,17 @@
+require("dotenv").config();
 const nodemailer = require('nodemailer');
 
+const two_factor_admin_email = process.env.TWO_FACTOR_ADMIN_EMAIL
+const two_factor_admin_email_password = process.env.TWO_FACTOR_ADMIN_EMAIL_PASSWORD
+
 // Create a nodemailer transporter
-exports.transporter = nodemailer.createTransport({
-  service: 'SMTP',
-  auth: {
-    user: 'your-email@example.com', // Replace with your email address
-    pass: 'your-email-password' // Replace with your email password or app-specific password
-  }
-});
+var smtpConfig = {
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // use SSL
+    auth: {
+        user: two_factor_admin_email,
+        pass: two_factor_admin_email_password
+    }
+};
+module.exports = nodemailer.createTransport(smtpConfig);
