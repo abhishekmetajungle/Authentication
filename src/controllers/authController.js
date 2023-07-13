@@ -4,25 +4,84 @@ const User = require('../models/userModel');
 const transporter = require('../config/smtp_email_sender.js');
 
 exports.login = async (req, res) => {
-  const { username, password } = req.body;
-
   try {
+    const { username, password } = req.body;
+
+    // Check if the user exists in the database
     const user = await User.findOne({ username });
-
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    // Verify the user's password
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    const token = jwt.sign({ username }, 'secret_key');
-    res.json({ accessToken: token });
+    res.status(200).json({ message: 'Credentials validated successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error: ' + error });
+    res.status(500).json({ error: 'Validation failed' });
+  }
+};
+
+exports.generateTwoFactorOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Check if the user exists in the database
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate an OTP (e.g., 6-digit code)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store the OTP in the user's document in the database
+    user.otp = otp;
+    await user.save();
+
+    // Send the OTP to the user's email address
+    const two_factor_admin_email = process.env.TWO_FACTOR_ADMIN_EMAIL
+    await transporter.sendMail({
+      from: two_factor_admin_email,
+      to: user.email,
+      subject: 'One-Time Password (OTP)',
+      text: `Your Two Factor authentication OTP is: ${otp}`
+    });
+
+    res.status(200).json({ message: 'OTP generated and sent successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate OTP' });
+  }
+};
+
+exports.validateTwoFactorOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    // Check if the user exists in the database
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Validate the OTP
+    if (otp != user.otp) {
+      return res.status(401).json({ error: 'Invalid OTP' });
+    }
+
+    // Generate a JWT token
+    try {
+      const secret_key = process.env.SECRET_KEY
+      const token = jwt.sign({ email }, secret_key, { expiresIn: '1h' });
+      res.status(200).json({ token });
+    } catch (error) {
+      res.status(500).json({ error: 'JWT Token Generation failed: ' + error});
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'OTP validation failed' });
   }
 };
 
@@ -43,8 +102,7 @@ exports.register = async (req, res) => {
       username,
       password: hashedPassword,
       email,
-      role: role | 'admin',
-      twoFactorCode: hashedTwoFactorCode
+      role: role | 'admin'
     });
 
     await user.save();
